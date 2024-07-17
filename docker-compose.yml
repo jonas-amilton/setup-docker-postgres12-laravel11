@@ -1,0 +1,88 @@
+version: "3.10"
+
+services:
+  # Serviço principal da aplicação Laravel
+  # image project
+  app:
+    # Define o contexto e o Dockerfile para construir a imagem da aplicação
+    build:
+      context: .
+      dockerfile:
+        Dockerfile
+        # Reinicia o serviço a menos que ele seja parado manualmente
+    restart:
+      unless-stopped
+      # Define o diretório de trabalho dentro do contêiner
+    working_dir:
+      /var/www/
+      # Mapeia o diretório atual para o diretório de trabalho no contêiner
+    volumes:
+      - ./:/var/www
+    networks:
+      - laravel # Adiciona o serviço à rede 'laravel'
+
+  # Serviço de servidor web Nginx
+  # nginx
+  nginx:
+    image:
+      nginx:alpine # Imagem do Nginx com Alpine Linux
+      # Reinicia o serviço a menos que ele seja parado manualmente
+    restart:
+      unless-stopped
+      # Mapeia a porta 80 do contêiner para a porta 8989 no host
+    ports:
+      - "8989:80"
+        # Mapeia o diretório da aplicação e a configuração personalizada do Nginx
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/:/etc/nginx/conf.d/
+    networks:
+      - laravel # Adiciona o serviço à rede 'laravel'
+
+  # Serviço do banco de dados PostgreSQL
+  # db postgres
+  db:
+    image:
+      postgres:12 # Imagem do PostgreSQL 12
+      # Reinicia o serviço a menos que ele seja parado manualmente
+    restart:
+      unless-stopped
+      # Define variáveis de ambiente para configurar o banco de dados
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-nome_do_banco_de_dados}
+      POSTGRES_USER: ${DB_USERNAME:-nome_do_usuario_do_banco_de_dados}
+      POSTGRES_PASSWORD:
+        ${DB_PASSWORD:-senha_do_banco_de_dados}
+        # Mapeia um diretório no host para persistir os dados do banco de dados
+    volumes:
+      - ./.docker/postgres/dbdata:/var/lib/postgresql/data
+        # Mapeia a porta 5432 do contêiner para a porta 5432 no host
+    ports:
+      - "5432:5432"
+    networks:
+      - laravel # Adiciona o serviço à rede 'laravel'
+
+  # Serviço para processamento de filas do Laravel
+  # queue
+  queue:
+    image:
+      nome_do_usuario_de_dockerhub/nome_do_repositorio_de_dockerhub # Imagem da aplicação Laravel construída no serviço 'app'
+      # Reinicia o serviço a menos que ele seja parado manualmente
+    restart:
+      unless-stopped
+      # Define o comando para processar filas do Laravel
+    command:
+      "php artisan queue:work"
+      # Mapeia o diretório da aplicação para o diretório de trabalho no contêiner
+    volumes:
+      - ./:/var/www
+        # Define a ordem de inicialização dos serviços; 'queue' depende do 'app'
+    depends_on:
+      - app
+    networks:
+      - laravel # Adiciona o serviço à rede 'laravel'
+
+# Define a rede 'laravel' com o driver 'bridge' para comunicação entre os contêineres
+networks:
+  laravel:
+    driver: bridge
